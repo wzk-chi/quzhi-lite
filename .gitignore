@@ -1,0 +1,27 @@
+.gradle/
+.kotlin/
+build/
+**/build/
+local.properties
+.idea/
+*.iml
+
+# Android Studio and native build outputs
+.externalNativeBuild/
+.cxx/
+captures/
+*.apk
+*.aab
+
+# Local tooling and virtual environments
+.venv/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+*.tmp

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.QuzhiLite" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:statusBarColor">#FF151110</item>
+        <item name="android:navigationBarColor">#FF151110</item>
+        <item name="android:windowBackground">#FF151110</item>
+    </style>
+</resources>
