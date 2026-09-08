@@ -280,10 +280,10 @@ fun AddDeviceScreen(
         }
     }
 
-    fun saveAfterConnection(rawSnCode: String) {
-        val enteredSn = rawSnCode.trim().uppercase()
-        if (enteredSn.length != 12 || enteredSn.any { !it.isDigit() && it !in 'A'..'F' }) {
-            message = "请输入有效的 12 位 SN"
+    fun saveAfterConnection(rawDeviceIdentifier: String) {
+        val enteredIdentifier = rawDeviceIdentifier.trim().uppercase()
+        if (!isValidDeviceIdentifier(enteredIdentifier)) {
+            message = "请输入有效的 12 位 SN 或 MAC 地址"
             return
         }
         if (loading || bluetoothScanning || resolvingLocations) {
@@ -293,12 +293,12 @@ fun AddDeviceScreen(
         message = "正在测试设备连接…"
         scope.launch {
             try {
-                val location = deviceInfoApi.queryByMac(session, enteredSn)
-                    ?: throw ApiException("未查询到该 SN 对应的设备")
+                val location = deviceInfoApi.queryByMac(session, enteredIdentifier)
+                    ?: throw ApiException("未查询到该 SN/MAC 对应的设备")
                 if (!location.hasAddress()) {
                     throw ApiException("该设备暂未返回楼栋、楼层或房间信息")
                 }
-                val resolvedSn = location.snCode?.takeIf { it.isNotBlank() } ?: enteredSn
+                val resolvedSn = location.snCode?.takeIf { it.isNotBlank() } ?: enteredIdentifier
                 onDeviceSaved(
                     SavedDevice(
                         snCode = resolvedSn,
@@ -442,18 +442,20 @@ fun AddDeviceScreen(
                             OutlinedTextField(
                                 value = snCode,
                                 onValueChange = { value ->
-                                    snCode = value.filter(Char::isLetterOrDigit).take(12).uppercase()
+                                    snCode = value.filter {
+                                        it.isDigit() || it in 'A'..'F' || it in 'a'..'f' || it == ':'
+                                    }.take(17).uppercase()
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                label = { Text("设备 SN") },
-                                placeholder = { Text("例如 C47F0ED5C2C7") },
+                                label = { Text("设备 SN/MAC") },
+                                placeholder = { Text("请输入设备 SN 或 MAC") },
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
                                 enabled = !loading,
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Outlined.Edit,
-                                        contentDescription = "设备 SN",
+                                        contentDescription = "设备 SN/MAC",
                                     )
                                 },
                             )
@@ -636,7 +638,6 @@ private fun DiscoveredDeviceCard(
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
-            Text("SN：${location?.snCode?.takeIf { it.isNotBlank() } ?: device.snCode.orEmpty()}")
             Row(
                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -660,11 +661,23 @@ private fun DiscoveredDeviceCard(
 
 private fun locationText(location: DeviceLocation?): String {
     if (location == null) {
-        return "正在获取楼栋/楼层/房间…"
+        return "正在获取位置…"
     }
     return buildList {
-        location.buildingName?.takeIf { it.isNotBlank() }?.let { add("楼栋 $it") }
-        location.floorName?.takeIf { it.isNotBlank() }?.let { add("楼层 $it") }
-        location.roomName?.takeIf { it.isNotBlank() }?.let { add("房间 $it") }
-    }.joinToString(" · ").ifBlank { "位置暂未获取" }
+        location.buildingName?.takeIf { it.isNotBlank() }?.let(::add)
+        location.floorName?.takeIf { it.isNotBlank() }?.let(::add)
+        location.roomName?.takeIf { it.isNotBlank() }?.let(::add)
+    }.joinToString(separator = "").ifBlank { "位置暂未获取" }
+}
+
+private fun isValidDeviceIdentifier(value: String): Boolean {
+    val parts = value.split(':')
+    val compactLength = parts.sumOf(String::length)
+    val isHex = parts.all { part ->
+        part.all { character ->
+            character.isDigit() || character in 'A'..'F'
+        }
+    }
+    return compactLength == 12 && isHex &&
+        (parts.size == 1 || (parts.size == 6 && parts.all { it.length == 2 }))
 }

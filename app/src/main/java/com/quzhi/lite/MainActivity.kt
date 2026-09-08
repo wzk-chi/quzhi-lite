@@ -1,5 +1,7 @@
 package com.quzhi.lite
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -20,11 +22,18 @@ import com.quzhi.lite.data.QuzhiApi
 import com.quzhi.lite.data.SessionStore
 import com.quzhi.lite.ui.AddDeviceScreen
 import com.quzhi.lite.ui.AnnouncementDialog
+import com.quzhi.lite.ui.AboutScreen
+import com.quzhi.lite.ui.GITHUB_REPOSITORY_URL
 import com.quzhi.lite.ui.HomeScreen
+import com.quzhi.lite.ui.HistoryOrderScreen
 import com.quzhi.lite.ui.LoginScreen
 import com.quzhi.lite.ui.QuzhiLiteTheme
 
 class MainActivity : ComponentActivity() {
+    private fun openRepository() {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_REPOSITORY_URL)))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -46,6 +55,7 @@ class MainActivity : ComponentActivity() {
                 when (announcementStatus) {
                     AnnouncementConsentStatus.Pending -> {
                         AnnouncementDialog(
+                            onOpenRepository = ::openRepository,
                             onAccept = {
                                 announcementConsentStore.accept()
                                 announcementStatus = AnnouncementConsentStatus.Accepted
@@ -59,6 +69,8 @@ class MainActivity : ComponentActivity() {
                     AnnouncementConsentStatus.Accepted -> {
                         var session by remember { mutableStateOf(savedSession) }
                         var showAddDevice by rememberSaveable { mutableStateOf(false) }
+                        var showHistoryOrders by rememberSaveable { mutableStateOf(false) }
+                        var showAbout by rememberSaveable { mutableStateOf(false) }
                         var refreshBalanceOnHomeEntry by rememberSaveable { mutableStateOf(true) }
 
                         val activeSession = session
@@ -69,6 +81,8 @@ class MainActivity : ComponentActivity() {
                                     sessionStore.save(newSession)
                                     session = newSession
                                     showAddDevice = false
+                                    showHistoryOrders = false
+                                    showAbout = false
                                     refreshBalanceOnHomeEntry = true
                                 },
                             )
@@ -77,8 +91,14 @@ class MainActivity : ComponentActivity() {
                                 mutableStateOf(deviceStore.load(activeSession))
                             }
 
-                            BackHandler(enabled = showAddDevice) {
-                                showAddDevice = false
+                            BackHandler(enabled = showAddDevice || showHistoryOrders || showAbout) {
+                                if (showAddDevice) {
+                                    showAddDevice = false
+                                } else if (showHistoryOrders) {
+                                    showHistoryOrders = false
+                                } else {
+                                    showAbout = false
+                                }
                             }
 
                             if (showAddDevice) {
@@ -92,6 +112,17 @@ class MainActivity : ComponentActivity() {
                                         savedDevices = deviceStore.load(activeSession)
                                     },
                                 )
+                            } else if (showHistoryOrders) {
+                                HistoryOrderScreen(
+                                    session = activeSession,
+                                    api = api,
+                                    onBack = { showHistoryOrders = false },
+                                )
+                            } else if (showAbout) {
+                                AboutScreen(
+                                    onBack = { showAbout = false },
+                                    onOpenRepository = ::openRepository,
+                                )
                             } else {
                                 HomeScreen(
                                     session = activeSession,
@@ -102,7 +133,21 @@ class MainActivity : ComponentActivity() {
                                     refreshBalanceOnEnter = refreshBalanceOnHomeEntry,
                                     onOpenAddDevice = {
                                         refreshBalanceOnHomeEntry = false
+                                        showHistoryOrders = false
+                                        showAbout = false
                                         showAddDevice = true
+                                    },
+                                    onOpenOrderHistory = {
+                                        refreshBalanceOnHomeEntry = false
+                                        showAddDevice = false
+                                        showAbout = false
+                                        showHistoryOrders = true
+                                    },
+                                    onOpenAbout = {
+                                        refreshBalanceOnHomeEntry = false
+                                        showAddDevice = false
+                                        showHistoryOrders = false
+                                        showAbout = true
                                     },
                                     onDeleteDevice = { device ->
                                         deviceStore.delete(activeSession, device)
@@ -112,6 +157,8 @@ class MainActivity : ComponentActivity() {
                                         sessionStore.clear()
                                         session = null
                                         showAddDevice = false
+                                        showHistoryOrders = false
+                                        showAbout = false
                                         refreshBalanceOnHomeEntry = true
                                     },
                                 )

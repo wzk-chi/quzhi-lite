@@ -36,6 +36,29 @@ data class WalletBalance(
     }
 }
 
+data class ConsumptionOrder(
+    val orderNo: String,
+    val consumeDate: String,
+    val location: String,
+    val consumeMoney: Double,
+    val tradeSettlement: Int,
+    val runStatus: Int,
+) {
+    fun formattedAmount(): String {
+        return BigDecimal.valueOf(consumeMoney)
+            .setScale(2, RoundingMode.HALF_UP)
+            .toPlainString()
+    }
+
+    fun settlementText(): String {
+        return if (tradeSettlement == 1) "已支付" else "未支付"
+    }
+
+    fun runStatusText(): String {
+        return if (runStatus == 1) "已完成" else "未完成"
+    }
+}
+
 internal fun formatMilliUnits(milliUnits: Long): String {
     return BigDecimal.valueOf(milliUnits)
         .movePointLeft(3)
@@ -121,6 +144,51 @@ class QuzhiApi(
             accountMilliUnits = data.longValue("accountMoney", "accountRealMoney"),
             givenMilliUnits = data.longValue("accountGivenMoney"),
         )
+    }
+
+    suspend fun fetchConsumptionOrders(
+        session: UserSession,
+        month: String,
+    ): List<ConsumptionOrder> {
+        val response = withContext(Dispatchers.IO) {
+            get(
+                path = "order/query/account/bill/list",
+                parameters = commonParameters(session) + mapOf(
+                    "month" to month,
+                    "billRequestType" to "2",
+                ),
+                projectId = session.projectId,
+            )
+        }
+        if (response.errorCode != 0) {
+            throw ApiException(response.message ?: "历史订单获取失败（${response.errorCode}）")
+        }
+
+        val data = response.data
+            ?.takeUnless { it.isJsonNull }
+            ?: return emptyList()
+        if (!data.isJsonArray) {
+            throw ApiException("历史订单响应格式异常")
+        }
+
+        return gson.fromJson(data, Array<BillInfoDto>::class.java)
+            .asSequence()
+            .filter { it.billType == 2 }
+            .mapNotNull { item ->
+                item.consumeBillDTO?.let { consume ->
+                    ConsumptionOrder(
+                        orderNo = consume.orderNo.orEmpty(),
+                        consumeDate = consume.consumeDate.orEmpty(),
+                        location = consume.description
+                            ?.takeIf { it.isNotBlank() }
+                            ?: consume.deviceDescription.orEmpty(),
+                        consumeMoney = consume.consumeMoney,
+                        tradeSettlement = consume.tradeSettlement,
+                        runStatus = consume.runStatus,
+                    )
+                }
+            }
+            .toList()
     }
 
     private fun postForm(path: String, parameters: Map<String, String>): ApiResponse {
@@ -228,6 +296,21 @@ class QuzhiApi(
         val userId: Long? = null,
         val name: String? = null,
         val userAccount: UserInfoDto? = null,
+    )
+
+    private data class BillInfoDto(
+        val billType: Int = 0,
+        val consumeBillDTO: ConsumeBillDto? = null,
+    )
+
+    private data class ConsumeBillDto(
+        val consumeDate: String? = null,
+        val consumeMoney: Double = 0.0,
+        val description: String? = null,
+        val deviceDescription: String? = null,
+        val orderNo: String? = null,
+        val runStatus: Int = 0,
+        val tradeSettlement: Int = 0,
     )
 
     private companion object {

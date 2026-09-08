@@ -20,10 +20,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -79,6 +80,8 @@ fun HomeScreen(
     devices: List<SavedDevice>,
     refreshBalanceOnEnter: Boolean,
     onOpenAddDevice: () -> Unit,
+    onOpenOrderHistory: () -> Unit,
+    onOpenAbout: () -> Unit,
     onDeleteDevice: (SavedDevice) -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -188,7 +191,7 @@ fun HomeScreen(
                     balance = balance,
                     balanceLoading = balanceLoading,
                     balanceMessage = balanceMessage,
-                    onRefreshBalance = { scope.launch { refreshBalance() } },
+                    onOpenOrderHistory = onOpenOrderHistory,
                     logoutEnabled = !busy,
                     onLogout = onLogout,
                 )
@@ -214,6 +217,7 @@ fun HomeScreen(
                 SectionHeading(
                     title = "我的设备",
                     supporting = if (devices.isEmpty()) "还没有已保存的热水设备" else "共 ${devices.size} 台",
+                    onOpenAbout = onOpenAbout,
                 )
             }
             if (devices.isEmpty()) {
@@ -291,7 +295,7 @@ private fun AccountCard(
     balance: WalletBalance?,
     balanceLoading: Boolean,
     balanceMessage: String?,
-    onRefreshBalance: () -> Unit,
+    onOpenOrderHistory: () -> Unit,
     logoutEnabled: Boolean,
     onLogout: () -> Unit,
 ) {
@@ -365,12 +369,11 @@ private fun AccountCard(
                                 )
                             }
                             IconButton(
-                                onClick = onRefreshBalance,
-                                enabled = !balanceLoading,
+                                onClick = onOpenOrderHistory,
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.Refresh,
-                                    contentDescription = "刷新余额",
+                                    imageVector = Icons.Outlined.ReceiptLong,
+                                    contentDescription = "历史订单",
                                 )
                             }
                         }
@@ -407,10 +410,10 @@ private fun AccountCard(
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
-                            IconButton(onClick = onRefreshBalance) {
+                            IconButton(onClick = onOpenOrderHistory) {
                                 Icon(
-                                    imageVector = Icons.Outlined.Refresh,
-                                    contentDescription = "刷新余额",
+                                    imageVector = Icons.Outlined.ReceiptLong,
+                                    contentDescription = "历史订单",
                                 )
                             }
                         }
@@ -429,8 +432,13 @@ private fun AccountCard(
 }
 
 @Composable
-private fun SectionHeading(title: String, supporting: String) {
+private fun SectionHeading(
+    title: String,
+    supporting: String,
+    onOpenAbout: () -> Unit,
+) {
     Row(
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -440,13 +448,24 @@ private fun SectionHeading(title: String, supporting: String) {
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(26.dp),
         )
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             Text(title, style = MaterialTheme.typography.titleLarge)
             Text(
                 supporting,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        TextButton(onClick = onOpenAbout) {
+            Icon(
+                imageVector = Icons.Outlined.Info,
+                contentDescription = "关于",
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("关于")
         }
     }
 }
@@ -508,14 +527,29 @@ private fun SavedDeviceCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.LocationOn,
-                    contentDescription = "设备位置",
+                    imageVector = Icons.Outlined.Devices,
+                    contentDescription = "蓝牙设备",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(22.dp),
                 )
                 Text(
-                    text = deviceLocationText(device),
+                    text = device.name,
                     style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.LocationOn,
+                    contentDescription = "设备位置",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = deviceLocationText(device),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Button(
@@ -537,8 +571,8 @@ private fun SavedDeviceCard(
 
 private fun deviceLocationText(device: SavedDevice): String {
     return buildList {
-        device.buildingName.takeIf { it.isNotBlank() }?.let { add("楼栋 $it") }
-        device.floorName.takeIf { it.isNotBlank() }?.let { add("楼层 $it") }
-        device.roomName.takeIf { it.isNotBlank() }?.let { add("房间 $it") }
-    }.joinToString(" · ").ifBlank { "位置暂未获取" }
+        device.buildingName.takeIf { it.isNotBlank() }?.let(::add)
+        device.floorName.takeIf { it.isNotBlank() }?.let(::add)
+        device.roomName.takeIf { it.isNotBlank() }?.let(::add)
+    }.joinToString(separator = "").ifBlank { "位置暂未获取" }
 }
