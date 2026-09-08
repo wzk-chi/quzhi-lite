@@ -124,6 +124,27 @@ class QuzhiApi(
         return parseLoginResponse(response)
     }
 
+    suspend fun renewLoginCacheIfNeeded(
+        session: UserSession,
+        lastRenewalAt: Long,
+    ): Boolean {
+        val now = System.currentTimeMillis()
+        if (lastRenewalAt > 0L && now - lastRenewalAt < LOGIN_CACHE_RENEWAL_INTERVAL_MILLIS) {
+            return false
+        }
+
+        val response = withContext(Dispatchers.IO) {
+            postForm(
+                path = "user/login/cache/renewal",
+                parameters = loginCacheRenewalParameters(session),
+            )
+        }
+        if (response.errorCode != 0) {
+            throw ApiException(response.message ?: "会话续期失败（${response.errorCode}）")
+        }
+        return true
+    }
+
     suspend fun fetchBalance(session: UserSession): WalletBalance {
         val response = withContext(Dispatchers.IO) {
             get(
@@ -242,6 +263,19 @@ class QuzhiApi(
         }
     }
 
+    private fun loginCacheRenewalParameters(session: UserSession): Map<String, String> {
+        val loginCode = session.v3LoginCode.ifBlank { session.loginCode }
+        return mapOf(
+            "userId" to session.userId.toString(),
+            "telephone" to session.telephone,
+            "phoneSystem" to "android",
+            "version" to APP_VERSION,
+            "loginCode" to loginCode,
+            "accountId" to session.accountId.toString(),
+            "projectId" to session.projectId.toString(),
+        )
+    }
+
     private fun execute(request: Request): ApiResponse {
         client.newCall(request).execute().use { response: Response ->
             val body = response.body?.string().orEmpty()
@@ -316,6 +350,7 @@ class QuzhiApi(
     private companion object {
         const val BASE_URL = "https://v3-api.china-qzxy.cn/"
         const val APP_VERSION = "6.5.28"
+        const val LOGIN_CACHE_RENEWAL_INTERVAL_MILLIS = 604_800_000L
         const val CONFIG_KEYS =
             "module_list,advertise_type,question_list,service_phone_list,banner_list_app,activity_list_app,aliCard_popup_config"
     }

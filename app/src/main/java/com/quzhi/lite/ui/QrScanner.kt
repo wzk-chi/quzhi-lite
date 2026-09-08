@@ -19,6 +19,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import com.google.mlkit.vision.barcode.BarcodeScanning
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions
+import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -35,7 +37,12 @@ fun QrScanner(
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
     }
-    val scanner = remember { BarcodeScanning.getClient() }
+    val scannerOptions = remember {
+        BarcodeScannerOptions.Builder()
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+            .build()
+    }
+    val scanner = remember { BarcodeScanning.getClient(scannerOptions) }
     val analyzerExecutor = remember { Executors.newSingleThreadExecutor() }
     val detected = remember { AtomicBoolean(false) }
     val disposed = remember { AtomicBoolean(false) }

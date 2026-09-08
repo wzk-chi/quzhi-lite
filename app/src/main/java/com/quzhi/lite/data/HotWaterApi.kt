@@ -206,23 +206,20 @@ private fun JsonObject.intValue(vararg names: String): Int? {
 }
 
 private fun JsonObject.consumedMilliUnits(): Long? {
-    val accountMilliUnits = longValue("upMoney", "consumeMoney")
-    val givenMilliUnits = longValue("upLeadMoney", "preDeductMoneyAfter")
-    return when {
-        accountMilliUnits == null && givenMilliUnits == null -> null
-        else -> (accountMilliUnits ?: 0L) + (givenMilliUnits ?: 0L)
+    val preDeductMilliUnits = longValue("preDeductMoney")
+    val preDeductAfterMilliUnits = longValue("preDeductMoneyAfter")
+    return if (preDeductMilliUnits != null && preDeductAfterMilliUnits != null) {
+        preDeductMilliUnits - preDeductAfterMilliUnits
+    } else {
+        null
     }
 }
 
-private fun JsonObject.longValue(vararg names: String): Long? {
-    return names.asSequence()
-        .mapNotNull { name ->
-            get(name)
-                ?.takeUnless { it.isJsonNull }
-                ?.asString
-                ?.toLongOrNull()
-        }
-        .firstOrNull()
+private fun JsonObject.longValue(name: String): Long? {
+    return get(name)
+        ?.takeUnless { it.isJsonNull }
+        ?.asString
+        ?.toLongOrNull()
 }
 
 private fun JsonObject.booleanValue(name: String): Boolean? {

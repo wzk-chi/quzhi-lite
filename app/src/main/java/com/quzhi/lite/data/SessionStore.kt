@@ -43,6 +43,16 @@ class SessionStore(
             .apply()
     }
 
+    fun loadLastLoginCacheRenewalAt(): Long {
+        return preferences.getLong(LAST_LOGIN_CACHE_RENEWAL_AT, 0L)
+    }
+
+    fun saveLastLoginCacheRenewalAt(timestamp: Long) {
+        preferences.edit()
+            .putLong(LAST_LOGIN_CACHE_RENEWAL_AT, timestamp)
+            .apply()
+    }
+
     fun clear() {
         preferences.edit().clear().apply()
     }
@@ -73,5 +83,6 @@ class SessionStore(
         const val PREFERENCES = "quzhi_lite_session"
         const val DATA = "data"
         const val IV = "iv"
+        const val LAST_LOGIN_CACHE_RENEWAL_AT = "last_login_cache_renewal_at"
     }
 }

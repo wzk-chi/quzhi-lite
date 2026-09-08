@@ -17,14 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -92,6 +92,7 @@ fun HomeScreen(
     var operationState by remember { mutableStateOf<HotWaterUiState>(HotWaterUiState.Idle) }
     var stopSuccessAmountMilliUnits by remember { mutableStateOf<Long?>(null) }
     var showStopSuccessDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
     var balance by remember(session) { mutableStateOf(balanceStore.load(session)) }
     var balanceLoading by remember(session, refreshBalanceOnEnter) {
         mutableStateOf(refreshBalanceOnEnter)
@@ -193,7 +194,7 @@ fun HomeScreen(
                     balanceMessage = balanceMessage,
                     onOpenOrderHistory = onOpenOrderHistory,
                     logoutEnabled = !busy,
-                    onLogout = onLogout,
+                    onLogout = { showLogoutDialog = true },
                 )
             }
             item {
@@ -244,6 +245,29 @@ fun HomeScreen(
         }
     }
 
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("退出登录") },
+            text = { Text("确定要退出当前账号吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
+                        onLogout()
+                    },
+                ) {
+                    Text("退出")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("取消")
+                }
+            },
+        )
+    }
+
     if (showStopSuccessDialog) {
         AlertDialog(
             onDismissRequest = { showStopSuccessDialog = false },
@@ -252,7 +276,7 @@ fun HomeScreen(
                 Text(
                     stopSuccessAmountMilliUnits?.let {
                         "本次消费 ${formatMilliUnits(it)} 元"
-                    } ?: "本次消费金额暂未返回",
+                    } ?: "本次消费金额：未知",
                 )
             },
             confirmButton = {
@@ -339,7 +363,7 @@ private fun AccountCard(
                 }
                 IconButton(onClick = onLogout, enabled = logoutEnabled) {
                     Icon(
-                        imageVector = Icons.Outlined.Logout,
+                        imageVector = Icons.AutoMirrored.Outlined.Logout,
                         contentDescription = "退出登录",
                     )
                 }
@@ -372,7 +396,7 @@ private fun AccountCard(
                                 onClick = onOpenOrderHistory,
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.ReceiptLong,
+                                    imageVector = Icons.AutoMirrored.Outlined.ReceiptLong,
                                     contentDescription = "历史订单",
                                 )
                             }
@@ -412,7 +436,7 @@ private fun AccountCard(
                             )
                             IconButton(onClick = onOpenOrderHistory) {
                                 Icon(
-                                    imageVector = Icons.Outlined.ReceiptLong,
+                                    imageVector = Icons.AutoMirrored.Outlined.ReceiptLong,
                                     contentDescription = "历史订单",
                                 )
                             }
