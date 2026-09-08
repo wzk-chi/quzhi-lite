@@ -16,6 +16,10 @@ data class WaterOrder(
     val orderNo: String,
 )
 
+data class WaterStopResult(
+    val consumedMilliUnits: Long?,
+)
+
 class HotWaterApi(
     private val client: OkHttpClient = OkHttpClient(),
     private val gson: Gson = Gson(),
@@ -42,7 +46,7 @@ class HotWaterApi(
         }
     }
 
-    suspend fun stop(session: UserSession, snCode: String, orderNo: String) =
+    suspend fun stop(session: UserSession, snCode: String, orderNo: String): WaterStopResult =
         withContext(Dispatchers.IO) {
             val closeResponse = postForm(
                 session = session,
@@ -72,6 +76,12 @@ class HotWaterApi(
                 values = mapOf("orderNo" to orderNo),
             )
             requireSuccess(consumeResult, "消费结果未确认")
+
+            WaterStopResult(
+                consumedMilliUnits = consumeResult.data
+                    ?.asJsonObjectOrNull()
+                    ?.consumedMilliUnits(),
+            )
         }
 
     private suspend fun queryStart(session: UserSession, snCode: String): WaterOrder {
@@ -192,6 +202,26 @@ private fun JsonObject.stringValue(vararg names: String): String? {
 private fun JsonObject.intValue(vararg names: String): Int? {
     return names.asSequence()
         .mapNotNull { name -> get(name)?.takeUnless { it.isJsonNull }?.asInt }
+        .firstOrNull()
+}
+
+private fun JsonObject.consumedMilliUnits(): Long? {
+    val accountMilliUnits = longValue("upMoney", "consumeMoney")
+    val givenMilliUnits = longValue("upLeadMoney", "preDeductMoneyAfter")
+    return when {
+        accountMilliUnits == null && givenMilliUnits == null -> null
+        else -> (accountMilliUnits ?: 0L) + (givenMilliUnits ?: 0L)
+    }
+}
+
+private fun JsonObject.longValue(vararg names: String): Long? {
+    return names.asSequence()
+        .mapNotNull { name ->
+            get(name)
+                ?.takeUnless { it.isJsonNull }
+                ?.asString
+                ?.toLongOrNull()
+        }
         .firstOrNull()
 }
 

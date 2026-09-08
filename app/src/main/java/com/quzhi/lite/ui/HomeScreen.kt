@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.quzhi.lite.data.BalanceStore
+import com.quzhi.lite.data.formatMilliUnits
 import com.quzhi.lite.data.HotWaterApi
 import com.quzhi.lite.data.QuzhiApi
 import com.quzhi.lite.data.SavedDevice
@@ -86,6 +87,8 @@ fun HomeScreen(
     var selectedIdentity by rememberSaveable { mutableStateOf<String?>(null) }
     var deleteCandidate by remember { mutableStateOf<SavedDevice?>(null) }
     var operationState by remember { mutableStateOf<HotWaterUiState>(HotWaterUiState.Idle) }
+    var stopSuccessAmountMilliUnits by remember { mutableStateOf<Long?>(null) }
+    var showStopSuccessDialog by remember { mutableStateOf(false) }
     var balance by remember(session) { mutableStateOf(balanceStore.load(session)) }
     var balanceLoading by remember(session, refreshBalanceOnEnter) {
         mutableStateOf(refreshBalanceOnEnter)
@@ -147,8 +150,10 @@ fun HomeScreen(
         operationState = HotWaterUiState.Stopping
         scope.launch {
             try {
-                api.stop(session, device.snCode, order.orderNo)
+                val result = api.stop(session, device.snCode, order.orderNo)
                 operationState = HotWaterUiState.Idle
+                stopSuccessAmountMilliUnits = result.consumedMilliUnits
+                showStopSuccessDialog = true
                 refreshBalance()
             } catch (cancellationException: CancellationException) {
                 throw cancellationException
@@ -233,6 +238,25 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (showStopSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopSuccessDialog = false },
+            title = { Text("结束成功") },
+            text = {
+                Text(
+                    stopSuccessAmountMilliUnits?.let {
+                        "本次消费 ${formatMilliUnits(it)} 元"
+                    } ?: "本次消费金额暂未返回",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showStopSuccessDialog = false }) {
+                    Text("确定")
+                }
+            },
+        )
     }
 
     deleteCandidate?.let { device ->

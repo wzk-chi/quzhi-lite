@@ -32,11 +32,15 @@ data class WalletBalance(
         get() = accountMilliUnits + givenMilliUnits
 
     fun formattedAmount(): String {
-        return BigDecimal.valueOf(totalMilliUnits)
-            .movePointLeft(3)
-            .setScale(2, RoundingMode.HALF_UP)
-            .toPlainString()
+        return formatMilliUnits(totalMilliUnits)
     }
+}
+
+internal fun formatMilliUnits(milliUnits: Long): String {
+    return BigDecimal.valueOf(milliUnits)
+        .movePointLeft(3)
+        .setScale(2, RoundingMode.HALF_UP)
+        .toPlainString()
 }
 
 class ApiException(message: String) : IOException(message)
