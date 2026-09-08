@@ -2,7 +2,9 @@ package com.quzhi.lite.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,8 +16,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
@@ -30,6 +34,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +42,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,9 +55,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.quzhi.lite.data.BalanceStore
 import com.quzhi.lite.data.formatMilliUnits
 import com.quzhi.lite.data.HotWaterApi
@@ -101,8 +110,12 @@ fun HomeScreen(
     var balanceMessage by remember { mutableStateOf<String?>(null) }
     val runningOrder = (operationState as? HotWaterUiState.Running)?.order
         ?: (operationState as? HotWaterUiState.Error)?.order
-    val busy = operationState is HotWaterUiState.Starting ||
-        operationState is HotWaterUiState.Stopping
+    val loadingMessage = when (operationState) {
+        HotWaterUiState.Starting -> "正在启动"
+        HotWaterUiState.Stopping -> "正在关闭"
+        else -> null
+    }
+    val busy = loadingMessage != null
 
     LaunchedEffect(devices) {
         if (devices.none { it.identity == selectedIdentity }) {
@@ -163,8 +176,10 @@ fun HomeScreen(
                 refreshBalance()
             } catch (cancellationException: CancellationException) {
                 throw cancellationException
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 operationState = HotWaterUiState.Error(order)
+                val reason = error.message?.takeIf { it.isNotBlank() } ?: "未知原因"
+                Toast.makeText(context, "结束失败：$reason", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -195,7 +210,7 @@ fun HomeScreen(
                     balanceLoading = balanceLoading,
                     balanceMessage = balanceMessage,
                     onOpenOrderHistory = onOpenOrderHistory,
-                    logoutEnabled = !busy,
+                    actionsEnabled = !busy,
                     onLogout = { showLogoutDialog = true },
                 )
             }
@@ -204,12 +219,17 @@ fun HomeScreen(
                     title = "我的设备",
                     supporting = if (devices.isEmpty()) "还没有已保存的热水设备" else null,
                     onAddDevice = onOpenAddDevice,
-                    addDeviceEnabled = !busy,
+                    actionsEnabled = !busy,
                     onOpenAbout = onOpenAbout,
                 )
             }
             if (devices.isEmpty()) {
-                item { EmptyDeviceCard(onAddDevice = onOpenAddDevice) }
+                item {
+                    EmptyDeviceCard(
+                        onAddDevice = onOpenAddDevice,
+                        enabled = !busy,
+                    )
+                }
             } else {
                 items(
                     items = devices,
@@ -302,6 +322,13 @@ fun HomeScreen(
             },
         )
     }
+
+    loadingMessage?.let { message ->
+        LoadingOverlay(
+            message = message,
+            scrimAlpha = if (operationState is HotWaterUiState.Stopping) 0.52f else 0.36f,
+        )
+    }
 }
 
 @Composable
@@ -311,7 +338,7 @@ private fun AccountCard(
     balanceLoading: Boolean,
     balanceMessage: String?,
     onOpenOrderHistory: () -> Unit,
-    logoutEnabled: Boolean,
+    actionsEnabled: Boolean,
     onLogout: () -> Unit,
 ) {
     Card(
@@ -352,7 +379,7 @@ private fun AccountCard(
                         )
                     }
                 }
-                IconButton(onClick = onLogout, enabled = logoutEnabled) {
+                IconButton(onClick = onLogout, enabled = actionsEnabled) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.Logout,
                         contentDescription = "退出登录",
@@ -385,6 +412,7 @@ private fun AccountCard(
                             }
                             IconButton(
                                 onClick = onOpenOrderHistory,
+                                enabled = actionsEnabled,
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.ReceiptLong,
@@ -425,7 +453,10 @@ private fun AccountCard(
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
-                            IconButton(onClick = onOpenOrderHistory) {
+                            IconButton(
+                                onClick = onOpenOrderHistory,
+                                enabled = actionsEnabled,
+                            ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.ReceiptLong,
                                     contentDescription = "历史订单",
@@ -451,7 +482,7 @@ private fun SectionHeading(
     title: String,
     supporting: String?,
     onAddDevice: () -> Unit,
-    addDeviceEnabled: Boolean,
+    actionsEnabled: Boolean,
     onOpenAbout: () -> Unit,
 ) {
     Row(
@@ -480,7 +511,7 @@ private fun SectionHeading(
         }
         TextButton(
             onClick = onAddDevice,
-            enabled = addDeviceEnabled,
+            enabled = actionsEnabled,
         ) {
             Icon(
                 imageVector = Icons.Outlined.Add,
@@ -489,7 +520,7 @@ private fun SectionHeading(
             Spacer(modifier = Modifier.width(4.dp))
             Text("添加设备")
         }
-        TextButton(onClick = onOpenAbout) {
+        TextButton(onClick = onOpenAbout, enabled = actionsEnabled) {
             Icon(
                 imageVector = Icons.Outlined.Info,
                 contentDescription = "关于",
@@ -501,7 +532,10 @@ private fun SectionHeading(
 }
 
 @Composable
-private fun EmptyDeviceCard(onAddDevice: () -> Unit) {
+private fun EmptyDeviceCard(
+    onAddDevice: () -> Unit,
+    enabled: Boolean,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -519,7 +553,7 @@ private fun EmptyDeviceCard(onAddDevice: () -> Unit) {
                 )
                 Text("开始添加你的第一台设备", style = MaterialTheme.typography.titleMedium)
             }
-            OutlinedButton(onClick = onAddDevice) { Text("去添加设备") }
+            OutlinedButton(onClick = onAddDevice, enabled = enabled) { Text("去添加设备") }
         }
     }
 }
@@ -605,4 +639,46 @@ private fun deviceLocationText(device: SavedDevice): String {
         device.floorName.takeIf { it.isNotBlank() }?.let(::add)
         device.roomName.takeIf { it.isNotBlank() }?.let(::add)
     }.joinToString(separator = "").ifBlank { "位置暂未获取" }
+}
+
+@Composable
+private fun LoadingOverlay(
+    message: String,
+    scrimAlpha: Float,
+) {
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+        ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = scrimAlpha)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier.widthIn(min = 180.dp),
+                shape = RoundedCornerShape(4.dp),
+                color = Color.Black.copy(alpha = 0.82f),
+                contentColor = Color.White,
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(44.dp),
+                        color = Color.White,
+                        strokeWidth = 4.dp,
+                    )
+                    Text(message, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
+    }
 }

@@ -67,7 +67,7 @@ class HotWaterApi(
                     orderAlreadyClosed = true,
                 )
             }
-            requireSuccess(closeResponse, "结束热水失败")
+            requireStopSuccess(closeResponse, "结束热水失败")
 
             delay(resultDelayMillis)
             val closeResult = postForm(
@@ -78,7 +78,13 @@ class HotWaterApi(
                     "orderNo" to orderNo,
                 ),
             )
-            requireSuccess(closeResult, "结束结果未确认")
+            if (closeResult.errorCode == ORDER_ALREADY_CLOSED_ERROR_CODE) {
+                return@withContext WaterStopResult(
+                    consumedMilliUnits = null,
+                    orderAlreadyClosed = true,
+                )
+            }
+            requireStopSuccess(closeResult, "结束结果未确认")
 
             delay(resultDelayMillis)
             val consumeResult = postForm(
@@ -86,7 +92,7 @@ class HotWaterApi(
                 path = "order/consumeOrder/result/query",
                 values = mapOf("orderNo" to orderNo),
             )
-            requireSuccess(consumeResult, "消费结果未确认")
+            requireStopSuccess(consumeResult, "消费结果未确认")
 
             WaterStopResult(
                 consumedMilliUnits = consumeResult.data
@@ -145,9 +151,17 @@ class HotWaterApi(
         }
     }
 
-    private fun requireSuccess(response: ApiResponse, message: String) {
+    private fun requireStopSuccess(response: ApiResponse, message: String) {
         if (response.errorCode != 0) {
-            throw ApiException(response.message ?: "$message（${response.errorCode}）")
+            throw ApiException(stopErrorMessage(response, message))
+        }
+    }
+
+    private fun stopErrorMessage(response: ApiResponse, message: String): String {
+        return when (response.errorCode) {
+            ORDER_ALREADY_CLOSED_ERROR_CODE -> "设备已关闭，请前往账单查看"
+            ORDER_NUMBER_ERROR_CODE -> "订单号错误，请重试"
+            else -> response.message ?: "$message（${response.errorCode}）"
         }
     }
 
@@ -218,6 +232,7 @@ class HotWaterApi(
         const val DEVICE_ALREADY_IN_USE_ERROR_CODE = 307
         const val CANNOT_INTERRUPT_ERROR_CODE = 311
         const val ORDER_ALREADY_CLOSED_ERROR_CODE = 308
+        const val ORDER_NUMBER_ERROR_CODE = 309
         const val RESULT_DELAY_MILLIS = 5_000L
     }
 }
