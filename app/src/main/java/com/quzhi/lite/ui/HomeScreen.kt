@@ -198,26 +198,11 @@ fun HomeScreen(
                 )
             }
             item {
-                Button(
-                    onClick = onOpenAddDevice,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    enabled = !busy,
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Add,
-                        contentDescription = "添加设备",
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("添加设备")
-                }
-            }
-            item {
                 SectionHeading(
                     title = "我的设备",
-                    supporting = if (devices.isEmpty()) "还没有已保存的热水设备" else "共 ${devices.size} 台",
+                    supporting = if (devices.isEmpty()) "还没有已保存的热水设备" else null,
+                    onAddDevice = onOpenAddDevice,
+                    addDeviceEnabled = !busy,
                     onOpenAbout = onOpenAbout,
                 )
             }
@@ -458,7 +443,9 @@ private fun AccountCard(
 @Composable
 private fun SectionHeading(
     title: String,
-    supporting: String,
+    supporting: String?,
+    onAddDevice: () -> Unit,
+    addDeviceEnabled: Boolean,
     onOpenAbout: () -> Unit,
 ) {
     Row(
@@ -477,11 +464,24 @@ private fun SectionHeading(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(title, style = MaterialTheme.typography.titleLarge)
-            Text(
-                supporting,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            supporting?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        TextButton(
+            onClick = onAddDevice,
+            enabled = addDeviceEnabled,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Add,
+                contentDescription = "添加设备",
             )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("添加设备")
         }
         TextButton(onClick = onOpenAbout) {
             Icon(
