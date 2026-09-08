@@ -91,6 +91,7 @@ fun HomeScreen(
     var deleteCandidate by remember { mutableStateOf<SavedDevice?>(null) }
     var operationState by remember { mutableStateOf<HotWaterUiState>(HotWaterUiState.Idle) }
     var stopSuccessAmountMilliUnits by remember { mutableStateOf<Long?>(null) }
+    var stopOrderAlreadyClosed by remember { mutableStateOf(false) }
     var showStopSuccessDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var balance by remember(session) { mutableStateOf(balanceStore.load(session)) }
@@ -157,6 +158,7 @@ fun HomeScreen(
                 val result = api.stop(session, device.snCode, order.orderNo)
                 operationState = HotWaterUiState.Idle
                 stopSuccessAmountMilliUnits = result.consumedMilliUnits
+                stopOrderAlreadyClosed = result.orderAlreadyClosed
                 showStopSuccessDialog = true
                 refreshBalance()
             } catch (cancellationException: CancellationException) {
@@ -256,13 +258,17 @@ fun HomeScreen(
     if (showStopSuccessDialog) {
         AlertDialog(
             onDismissRequest = { showStopSuccessDialog = false },
-            title = { Text("结束成功") },
+            title = { Text(if (stopOrderAlreadyClosed) "订单已结束" else "结束成功") },
             text = {
-                Text(
-                    stopSuccessAmountMilliUnits?.let {
-                        "本次消费 ${formatMilliUnits(it)} 元"
-                    } ?: "本次消费金额：未知",
-                )
+                if (stopOrderAlreadyClosed) {
+                    Text("设备已关闭，请前往账单查看")
+                } else {
+                    Text(
+                        stopSuccessAmountMilliUnits?.let {
+                            "本次消费 ${formatMilliUnits(it)} 元"
+                        } ?: "本次消费金额：未知",
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = { showStopSuccessDialog = false }) {

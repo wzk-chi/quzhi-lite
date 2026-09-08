@@ -18,6 +18,7 @@ data class WaterOrder(
 
 data class WaterStopResult(
     val consumedMilliUnits: Long?,
+    val orderAlreadyClosed: Boolean = false,
 )
 
 class HotWaterApi(
@@ -41,8 +42,12 @@ class HotWaterApi(
                 queryStart(session, snCode)
             }
 
-            307 -> parseOwnedOrder(response.data)
-            else -> throw ApiException(response.message ?: "启动热水失败（${response.errorCode}）")
+            DEVICE_ALREADY_IN_USE_ERROR_CODE -> parseOwnedOrder(
+                data = response.data,
+                missingDataMessage = "设备正在使用中",
+            )
+
+            else -> throw ApiException(startErrorMessage(response))
         }
     }
 
@@ -56,6 +61,12 @@ class HotWaterApi(
                     "orderNo" to orderNo,
                 ),
             )
+            if (closeResponse.errorCode == ORDER_ALREADY_CLOSED_ERROR_CODE) {
+                return@withContext WaterStopResult(
+                    consumedMilliUnits = null,
+                    orderAlreadyClosed = true,
+                )
+            }
             requireSuccess(closeResponse, "结束热水失败")
 
             delay(resultDelayMillis)
@@ -93,7 +104,7 @@ class HotWaterApi(
                 "xfModel" to "0",
             ),
         )
-        requireSuccess(response, "启动结果未确认")
+        requireStartSuccess(response)
 
         val data = response.data?.asJsonObjectOrNull()
         return when (data?.intValue("result")) {
@@ -103,9 +114,12 @@ class HotWaterApi(
         }
     }
 
-    private fun parseOwnedOrder(data: JsonElement?): WaterOrder {
+    private fun parseOwnedOrder(
+        data: JsonElement?,
+        missingDataMessage: String = "启动响应缺少订单信息",
+    ): WaterOrder {
         val objectData = data?.asJsonObjectOrNull()
-            ?: throw ApiException("启动响应缺少订单信息")
+            ?: throw ApiException(missingDataMessage)
         val isOwner = objectData.booleanValue("isOwner")
         if (isOwner == false) {
             throw ApiException("设备正在被其他账号使用")
@@ -114,6 +128,21 @@ class HotWaterApi(
         val orderNo = objectData.stringValue("timeIds", "orderNo")
             ?: throw ApiException("启动响应缺少订单号")
         return WaterOrder(orderNo = orderNo)
+    }
+
+    private fun requireStartSuccess(response: ApiResponse) {
+        if (response.errorCode != 0) {
+            throw ApiException(startErrorMessage(response))
+        }
+    }
+
+    private fun startErrorMessage(response: ApiResponse): String {
+        return when (response.errorCode) {
+            INSUFFICIENT_BALANCE_ERROR_CODE -> "余额不足"
+            DEVICE_ALREADY_IN_USE_ERROR_CODE -> "设备正在使用中"
+            CANNOT_INTERRUPT_ERROR_CODE -> "当前设备不能中断"
+            else -> response.message ?: "启动热水失败（${response.errorCode}）"
+        }
     }
 
     private fun requireSuccess(response: ApiResponse, message: String) {
@@ -185,6 +214,10 @@ class HotWaterApi(
         const val APP_VERSION = "6.5.28"
         const val CONFIG_KEYS =
             "module_list,advertise_type,question_list,service_phone_list,banner_list_app,activity_list_app,aliCard_popup_config"
+        const val INSUFFICIENT_BALANCE_ERROR_CODE = 204
+        const val DEVICE_ALREADY_IN_USE_ERROR_CODE = 307
+        const val CANNOT_INTERRUPT_ERROR_CODE = 311
+        const val ORDER_ALREADY_CLOSED_ERROR_CODE = 308
         const val RESULT_DELAY_MILLIS = 5_000L
     }
 }
