@@ -11,9 +11,9 @@
 - 设计系统：Material 3
 - 应用模型：单 Activity、单 `app` 模块
 - 最低支持版本：Android 7.0（API 24）
-- 编译/目标版本：Android API 36
+- 编译/目标版本：Android 16（API 36）
 - Java 版本：17
-- 构建工具：Android Gradle Plugin 8.11.1、Gradle 9.1
+- 构建工具：Android Gradle Plugin 8.11.1、Gradle 8.13
 - ABI：`armeabi-v7a`、`arm64-v8a`
 
 ## 分层结构
