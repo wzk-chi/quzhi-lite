@@ -46,6 +46,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -64,6 +66,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.quzhi.lite.data.BalanceStore
 import com.quzhi.lite.data.formatMilliUnits
 import com.quzhi.lite.data.HotWaterApi
+import com.quzhi.lite.data.HotWaterMqttClient
 import com.quzhi.lite.data.QuzhiApi
 import com.quzhi.lite.data.SavedDevice
 import com.quzhi.lite.data.UserSession
@@ -86,6 +89,7 @@ fun HomeScreen(
     quzhiApi: QuzhiApi,
     balanceStore: BalanceStore,
     api: HotWaterApi,
+    mqttClient: HotWaterMqttClient,
     devices: List<SavedDevice>,
     refreshBalanceOnEnter: Boolean,
     onOpenAddDevice: () -> Unit,
@@ -108,6 +112,12 @@ fun HomeScreen(
         mutableStateOf(refreshBalanceOnEnter)
     }
     var balanceMessage by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(session) {
+        mqttClient.connectInBackground(session)
+        onDispose { mqttClient.disconnectInBackground() }
+    }
+
     val runningOrder = (operationState as? HotWaterUiState.Running)?.order
         ?: (operationState as? HotWaterUiState.Error)?.order
     val loadingMessage = when (operationState) {
@@ -673,8 +683,10 @@ private fun LoadingOverlay(
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(44.dp),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
                         strokeWidth = 4.dp,
+                        strokeCap = StrokeCap.Round,
                     )
                     Text(message, style = MaterialTheme.typography.titleMedium)
                 }

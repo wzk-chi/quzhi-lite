@@ -21,8 +21,8 @@ android {
         applicationId = "com.quzhi.lite"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.1"
+        versionCode = 5
+        versionName = "0.4.0"
 
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a")
@@ -83,6 +83,7 @@ dependencies {
 
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 }

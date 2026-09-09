@@ -1,5 +1,7 @@
 package com.quzhi.lite.data
 
+import android.os.SystemClock
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -24,9 +26,14 @@ data class WaterStopResult(
 class HotWaterApi(
     private val client: OkHttpClient = OkHttpClient(),
     private val gson: Gson = Gson(),
+    private val mqttClient: HotWaterMqttClient = HotWaterMqttClient(gson),
     private val resultDelayMillis: Long = RESULT_DELAY_MILLIS,
 ) {
     suspend fun start(session: UserSession, snCode: String): WaterOrder = withContext(Dispatchers.IO) {
+        val requestStartedAtMillis = SystemClock.elapsedRealtime()
+        Log.d(TAG, "start begin snCode=$snCode")
+        mqttClient.connectInBackground(session)
+        val operationStartedAtMillis = System.currentTimeMillis()
         val response = postForm(
             session = session,
             path = "order/tcpDevice/downRate/rateOrder",
@@ -35,11 +42,35 @@ class HotWaterApi(
                 "xfModel" to "0",
             ),
         )
+        Log.d(
+            TAG,
+            "start command response errorCode=${response.errorCode} " +
+                "elapsed=${SystemClock.elapsedRealtime() - requestStartedAtMillis}ms",
+        )
 
         when (response.errorCode) {
             0 -> {
-                delay(resultDelayMillis)
-                queryStart(session, snCode)
+                Log.d(TAG, "start waiting MQTT result timeout=${resultDelayMillis}ms")
+                val mqttResult = mqttClient.awaitStart(
+                    snCode = snCode,
+                    operationStartedAtMillis = operationStartedAtMillis,
+                    timeoutMillis = resultDelayMillis,
+                )
+                if (mqttResult != null) {
+                    Log.d(
+                        TAG,
+                        "start MQTT result received result=${mqttResult.result} " +
+                            "elapsed=${SystemClock.elapsedRealtime() - requestStartedAtMillis}ms",
+                    )
+                    parseMqttStartResult(session, mqttResult)
+                } else {
+                    Log.w(
+                        TAG,
+                        "start MQTT result timeout; fallback to HTTP query " +
+                            "elapsed=${SystemClock.elapsedRealtime() - requestStartedAtMillis}ms",
+                    )
+                    queryStart(session, snCode)
+                }
             }
 
             DEVICE_ALREADY_IN_USE_ERROR_CODE -> parseOwnedOrder(
@@ -53,6 +84,8 @@ class HotWaterApi(
 
     suspend fun stop(session: UserSession, snCode: String, orderNo: String): WaterStopResult =
         withContext(Dispatchers.IO) {
+            mqttClient.connectInBackground(session)
+            val operationStartedAtMillis = System.currentTimeMillis()
             val closeResponse = postForm(
                 session = session,
                 path = "order/tcpDevice/closeOrder",
@@ -69,24 +102,58 @@ class HotWaterApi(
             }
             requireStopSuccess(closeResponse, "结束热水失败")
 
-            delay(resultDelayMillis)
-            val closeResult = postForm(
-                session = session,
-                path = "order/tcpDevice/closeOrder/result/query",
-                values = mapOf(
-                    "snCode" to snCode,
-                    "orderNo" to orderNo,
-                ),
+            val mqttCloseResult = mqttClient.awaitClose(
+                snCode = snCode,
+                operationStartedAtMillis = operationStartedAtMillis,
+                timeoutMillis = resultDelayMillis,
             )
-            if (closeResult.errorCode == ORDER_ALREADY_CLOSED_ERROR_CODE) {
-                return@withContext WaterStopResult(
-                    consumedMilliUnits = null,
-                    orderAlreadyClosed = true,
-                )
-            }
-            requireStopSuccess(closeResult, "结束结果未确认")
 
-            delay(resultDelayMillis)
+            if (mqttCloseResult != null) {
+                when (mqttCloseResult.result) {
+                    CLOSE_SUCCESS_RESULT -> {
+                        val mqttConsumeResult = mqttClient.awaitConsume(
+                            operationStartedAtMillis = mqttCloseResult.receivedAtMillis,
+                            timeoutMillis = resultDelayMillis,
+                        )
+                        if (mqttConsumeResult != null) {
+                            return@withContext WaterStopResult(
+                                consumedMilliUnits = mqttConsumeResult.consumedMilliUnits(),
+                            )
+                        }
+                    }
+
+                    CLOSE_ALREADY_CLOSED_RESULT -> {
+                        return@withContext WaterStopResult(
+                            consumedMilliUnits = null,
+                            orderAlreadyClosed = true,
+                        )
+                    }
+
+                    CLOSE_ORDER_NUMBER_ERROR_RESULT -> {
+                        throw ApiException("订单号错误，请重试")
+                    }
+
+                    else -> throw ApiException("结束失败，请重试")
+                }
+            } else {
+                val closeResult = postForm(
+                    session = session,
+                    path = "order/tcpDevice/closeOrder/result/query",
+                    values = mapOf(
+                        "snCode" to snCode,
+                        "orderNo" to orderNo,
+                    ),
+                )
+                if (closeResult.errorCode == ORDER_ALREADY_CLOSED_ERROR_CODE) {
+                    return@withContext WaterStopResult(
+                        consumedMilliUnits = null,
+                        orderAlreadyClosed = true,
+                    )
+                }
+                requireStopSuccess(closeResult, "结束结果未确认")
+                delay(resultDelayMillis)
+            }
+
             val consumeResult = postForm(
                 session = session,
                 path = "order/consumeOrder/result/query",
@@ -99,9 +166,11 @@ class HotWaterApi(
                     ?.asJsonObjectOrNull()
                     ?.consumedMilliUnits(),
             )
-        }
+    }
 
     private suspend fun queryStart(session: UserSession, snCode: String): WaterOrder {
+        val queryStartedAtMillis = SystemClock.elapsedRealtime()
+        Log.d(TAG, "start HTTP result query begin snCode=$snCode")
         val response = postForm(
             session = session,
             path = "order/tcpDevice/query/downRateResult",
@@ -110,14 +179,38 @@ class HotWaterApi(
                 "xfModel" to "0",
             ),
         )
+        Log.d(
+            TAG,
+            "start HTTP result query response errorCode=${response.errorCode} " +
+                "elapsed=${SystemClock.elapsedRealtime() - queryStartedAtMillis}ms",
+        )
         requireStartSuccess(response)
 
         val data = response.data?.asJsonObjectOrNull()
         return when (data?.intValue("result")) {
-            0 -> parseOwnedOrder(response.data)
-            2 -> throw ApiException("设备拒绝启动")
+            0, START_ALREADY_USING_RESULT -> parseOwnedOrder(response.data)
+            START_INSUFFICIENT_BALANCE_RESULT -> throw ApiException("余额不足")
             else -> throw ApiException(response.message ?: "启动结果未确认")
         }
+    }
+
+    private fun parseMqttStartResult(
+        session: UserSession,
+        response: HotWaterMqttEvent.Start,
+    ): WaterOrder {
+        if (response.result == START_INSUFFICIENT_BALANCE_RESULT) {
+            throw ApiException("余额不足")
+        }
+        if (response.result != 0 && response.result != START_ALREADY_USING_RESULT) {
+            throw ApiException("启动失败，请重试")
+        }
+        if (session.accountId != response.accountId || response.accountType != ACCOUNT_TYPE_STUDENT) {
+            throw ApiException("设备正在被其他账号使用")
+        }
+        return WaterOrder(
+            orderNo = response.orderNo
+                ?: throw ApiException("启动响应缺少订单号"),
+        )
     }
 
     private fun parseOwnedOrder(
@@ -224,6 +317,7 @@ class HotWaterApi(
     )
 
     private companion object {
+        const val TAG = "HotWaterApi"
         const val BASE_URL = "https://v3-api.china-qzxy.cn/"
         const val APP_VERSION = "6.5.28"
         const val CONFIG_KEYS =
@@ -233,6 +327,12 @@ class HotWaterApi(
         const val CANNOT_INTERRUPT_ERROR_CODE = 311
         const val ORDER_ALREADY_CLOSED_ERROR_CODE = 308
         const val ORDER_NUMBER_ERROR_CODE = 309
+        const val START_INSUFFICIENT_BALANCE_RESULT = 2
+        const val START_ALREADY_USING_RESULT = 36
+        const val ACCOUNT_TYPE_STUDENT = 2
+        const val CLOSE_SUCCESS_RESULT = 0
+        const val CLOSE_ORDER_NUMBER_ERROR_RESULT = 38
+        const val CLOSE_ALREADY_CLOSED_RESULT = 40
         const val RESULT_DELAY_MILLIS = 5_000L
     }
 }
@@ -268,6 +368,16 @@ private fun JsonObject.longValue(name: String): Long? {
         ?.takeUnless { it.isJsonNull }
         ?.asString
         ?.toLongOrNull()
+}
+
+private fun HotWaterMqttEvent.Consume.consumedMilliUnits(): Long? {
+    return consumedMilliUnits ?: if (
+        preDeductMilliUnits != null && preDeductAfterMilliUnits != null
+    ) {
+        (preDeductMilliUnits - preDeductAfterMilliUnits).takeIf { it >= 0L }
+    } else {
+        null
+    }
 }
 
 private fun JsonObject.booleanValue(name: String): Boolean? {

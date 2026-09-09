@@ -19,6 +19,7 @@ import com.quzhi.lite.data.BalanceStore
 import com.quzhi.lite.data.DeviceInfoApi
 import com.quzhi.lite.data.DeviceStore
 import com.quzhi.lite.data.HotWaterApi
+import com.quzhi.lite.data.HotWaterMqttClient
 import com.quzhi.lite.data.QuzhiApi
 import com.quzhi.lite.data.SessionStore
 import com.quzhi.lite.data.UpdateApi
@@ -47,7 +48,8 @@ class MainActivity : ComponentActivity() {
         val announcementConsentStore = AnnouncementConsentStore(applicationContext)
         val sessionStore = SessionStore(applicationContext)
         val api = QuzhiApi()
-        val hotWaterApi = HotWaterApi()
+        val hotWaterMqttClient = HotWaterMqttClient()
+        val hotWaterApi = HotWaterApi(mqttClient = hotWaterMqttClient)
         val deviceInfoApi = DeviceInfoApi()
         val bluetoothDiscovery = BluetoothDiscovery(applicationContext)
         val deviceStore = DeviceStore(applicationContext)
@@ -158,6 +160,7 @@ class MainActivity : ComponentActivity() {
                                     quzhiApi = api,
                                     balanceStore = balanceStore,
                                     api = hotWaterApi,
+                                    mqttClient = hotWaterMqttClient,
                                     devices = savedDevices,
                                     refreshBalanceOnEnter = refreshBalanceOnHomeEntry,
                                     onOpenAddDevice = {
