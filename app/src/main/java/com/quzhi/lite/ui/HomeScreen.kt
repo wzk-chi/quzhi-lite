@@ -227,7 +227,7 @@ fun HomeScreen(
             item {
                 SectionHeading(
                     title = "我的设备",
-                    supporting = if (devices.isEmpty()) "还没有已保存的热水设备" else null,
+                    supporting = null,
                     onAddDevice = onOpenAddDevice,
                     actionsEnabled = !busy,
                     onOpenAbout = onOpenAbout,
