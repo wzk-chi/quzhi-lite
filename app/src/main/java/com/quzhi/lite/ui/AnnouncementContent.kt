@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,7 +31,7 @@ internal fun AnnouncementContent(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text(
-            text = "智趣轻享是个人独立开发的轻量 Android 客户端，项目完全免费，不收取软件费用，不设置会员、充值或其他付费入口。",
+            text = "趣智轻享是个人独立开发的轻量 Android 客户端，项目完全免费，不收取软件费用，不设置会员、充值或其他付费入口。",
             style = MaterialTheme.typography.bodyMedium,
         )
         Text(
@@ -57,7 +57,7 @@ internal fun AnnouncementContent(
             )
             TextButton(onClick = onOpenRepository) {
                 Icon(
-                    imageVector = Icons.Outlined.OpenInNew,
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                     contentDescription = "打开 GitHub 仓库",
                 )
                 Spacer(modifier = Modifier.width(8.dp))
